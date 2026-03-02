@@ -4,7 +4,9 @@ import { UserPlus, MapPin, Weight, CheckCircle2, History } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export default function FarmerInput() {
-  const { addFarmerInput } = useApp();
+  const { addFarmerInput, farmerInputs } = useApp();
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     location: '',
@@ -12,20 +14,28 @@ export default function FarmerInput() {
     quality: 'Good',
     type: 'Fresh Onion'
   });
-  const [recentInputs, setRecentInputs] = useState<any[]>([]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newInput = { ...formData, id: Date.now(), date: new Date().toLocaleTimeString() };
-    addFarmerInput(formData);
-    setRecentInputs([newInput, ...recentInputs]);
-    setFormData({
-      name: '',
-      location: '',
-      quantity: '',
-      quality: 'Good',
-      type: 'Fresh Onion'
-    });
+    setLoading(true);
+    setStatus(null);
+    try {
+      await addFarmerInput(formData);
+      setStatus({ type: 'success', message: 'Input submitted successfully!' });
+      setFormData({
+        name: '',
+        location: '',
+        quantity: '',
+        quality: 'Good',
+        type: 'Fresh Onion'
+      });
+      // Clear success message after 3 seconds
+      setTimeout(() => setStatus(null), 3000);
+    } catch (error: any) {
+      setStatus({ type: 'error', message: error.message || 'Failed to submit input' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -39,6 +49,15 @@ export default function FarmerInput() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {status && (
+            <div className={`p-4 rounded-2xl text-sm font-bold border ${
+              status.type === 'success' 
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+                : 'bg-red-50 text-red-700 border-red-100'
+            }`}>
+              {status.message}
+            </div>
+          )}
           <div className="space-y-2">
             <label className="text-sm font-bold text-stone-600 ml-1">Farmer Name</label>
             <input
@@ -110,9 +129,11 @@ export default function FarmerInput() {
 
           <button
             type="submit"
-            className="w-full bg-emerald-600 text-white p-4 rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 flex items-center justify-center gap-2"
+            disabled={loading}
+            className="w-full bg-emerald-600 text-white p-4 rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Submit to Processing <CheckCircle2 size={20} />
+            {loading ? 'Submitting...' : 'Submit to Processing'}
+            {!loading && <CheckCircle2 size={20} />}
           </button>
         </form>
       </div>
@@ -126,12 +147,12 @@ export default function FarmerInput() {
         </div>
 
         <div className="space-y-4">
-          {recentInputs.length === 0 ? (
+          {farmerInputs.length === 0 ? (
             <div className="text-center py-12 text-stone-400">
               <p>No recent submissions yet.</p>
             </div>
           ) : (
-            recentInputs.map((input, idx) => (
+            farmerInputs.map((input, idx) => (
               <motion.div
                 key={input.id}
                 initial={{ opacity: 0, x: 20 }}
@@ -141,7 +162,7 @@ export default function FarmerInput() {
               >
                 <div>
                   <p className="font-bold text-stone-800">{input.name}</p>
-                  <p className="text-xs text-stone-500">{input.location} • {input.date}</p>
+                  <p className="text-xs text-stone-500">{input.location} • {new Date(input.created_at).toLocaleTimeString()}</p>
                 </div>
                 <div className="text-right">
                   <p className="font-bold text-emerald-600">{input.quantity} kg</p>

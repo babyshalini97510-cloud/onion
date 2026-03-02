@@ -5,10 +5,13 @@ import { Leaf, ShieldCheck, ShoppingBag, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function Login() {
-  const { login } = useApp();
+  const { login, signIn, signUp } = useApp();
   const navigate = useNavigate();
   const [showInventoryLogin, setShowInventoryLogin] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
   const [formData, setFormData] = useState({ name: '', email: '', password: '' });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleRoleSelect = (role: UserRole) => {
     if (role === UserRole.INVENTORY_MANAGER) {
@@ -19,10 +22,25 @@ export default function Login() {
     }
   };
 
-  const handleInventoryLogin = (e: React.FormEvent) => {
+  const handleInventoryLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    login(UserRole.INVENTORY_MANAGER, { name: formData.name, email: formData.email });
-    navigate('/inventory');
+    setLoading(true);
+    setError('');
+    try {
+      if (isSignUp) {
+        await signUp(formData.email, formData.password, formData.name);
+        alert('Sign up successful! Please check your email for verification (if enabled) or sign in.');
+        setIsSignUp(false);
+      } else {
+        await signIn(formData.email, formData.password);
+        login(UserRole.INVENTORY_MANAGER);
+        navigate('/inventory');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Authentication failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -46,22 +64,34 @@ export default function Login() {
                   <ShieldCheck size={56} strokeWidth={1.5} />
                 </div>
               </div>
-              <h1 className="text-3xl font-bold text-[#4a3728] tracking-tight">Inventory Management</h1>
-              <p className="text-[#718096] text-sm">Access processing & supply chain tools</p>
+              <h1 className="text-3xl font-bold text-[#4a3728] tracking-tight">
+                {isSignUp ? 'Create Account' : 'Inventory Management'}
+              </h1>
+              <p className="text-[#718096] text-sm">
+                {isSignUp ? 'Join the Waste2Wellness network' : 'Access processing & supply chain tools'}
+              </p>
             </div>
 
-            <form onSubmit={handleInventoryLogin} className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-[#4a5568] tracking-widest uppercase ml-1">Full Name</label>
-                <input 
-                  type="text" 
-                  placeholder="John Doe"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-6 py-4 bg-[#edf2f7]/50 border border-transparent rounded-2xl focus:bg-white focus:border-[#1a8344] outline-none transition-all text-[#2d3748] placeholder:text-[#a0aec0]"
-                  required
-                />
+            {error && (
+              <div className="bg-red-50 text-red-600 p-4 rounded-2xl text-sm font-bold border border-red-100">
+                {error}
               </div>
+            )}
+
+            <form onSubmit={handleInventoryLogin} className="space-y-6">
+              {isSignUp && (
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-[#4a5568] tracking-widest uppercase ml-1">Full Name</label>
+                  <input 
+                    type="text" 
+                    placeholder="John Doe"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full px-6 py-4 bg-[#edf2f7]/50 border border-transparent rounded-2xl focus:bg-white focus:border-[#1a8344] outline-none transition-all text-[#2d3748] placeholder:text-[#a0aec0]"
+                    required
+                  />
+                </div>
+              )}
 
               <div className="space-y-2">
                 <label className="text-[10px] font-bold text-[#4a5568] tracking-widest uppercase ml-1">Email Address</label>
@@ -89,19 +119,29 @@ export default function Login() {
 
               <button 
                 type="submit"
-                className="w-full bg-[#1a8344] hover:bg-[#146c36] text-white font-bold py-5 rounded-2xl shadow-lg shadow-emerald-900/20 flex items-center justify-center gap-2 transition-all group"
+                disabled={loading}
+                className="w-full bg-[#1a8344] hover:bg-[#146c36] text-white font-bold py-5 rounded-2xl shadow-lg shadow-emerald-900/20 flex items-center justify-center gap-2 transition-all group disabled:opacity-50"
               >
-                Login to Dashboard
-                <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                {loading ? 'Processing...' : (isSignUp ? 'Create Account' : 'Login to Dashboard')}
+                {!loading && <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />}
               </button>
             </form>
 
-            <button 
-              onClick={() => setShowInventoryLogin(false)}
-              className="w-full text-center text-xs text-[#718096] hover:text-[#4a3728] font-medium transition-colors"
-            >
-              ← Back to portal selection
-            </button>
+            <div className="space-y-4">
+              <button 
+                onClick={() => setIsSignUp(!isSignUp)}
+                className="w-full text-center text-sm text-[#1a8344] font-bold hover:underline"
+              >
+                {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
+              </button>
+
+              <button 
+                onClick={() => setShowInventoryLogin(false)}
+                className="w-full text-center text-xs text-[#718096] hover:text-[#4a3728] font-medium transition-colors"
+              >
+                ← Back to portal selection
+              </button>
+            </div>
           </motion.div>
         </motion.div>
       ) : (

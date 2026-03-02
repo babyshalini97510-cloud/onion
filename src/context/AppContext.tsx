@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 
 export enum UserRole {
   INVENTORY_MANAGER = 'INVENTORY_MANAGER',
@@ -39,6 +40,9 @@ interface AppContextType {
   orders: any[];
   reviews: any[];
   addReview: (review: any) => void;
+  signUp: (email: string, password: string, name: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<void>;
+  farmerInputs: any[];
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -54,13 +58,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
-  const [inventory, setInventory] = useState({
-    rawOnions: 400,
-    onionSeeds: 150,
-    powder: 30.0,
-    paste: 20.0,
-    tea: 5.0,
-    oil: 6.0,
+  const [inventory, setInventory] = useState(() => {
+    const saved = localStorage.getItem('w2w_inventory');
+    return saved ? JSON.parse(saved) : {
+      rawOnions: 400,
+      onionSeeds: 150,
+      powder: 30.0,
+      paste: 20.0,
+      tea: 5.0,
+      oil: 6.0,
+    };
   });
 
   const [processingBatches, setProcessingBatches] = useState<any[]>([
@@ -86,6 +93,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : [];
   });
 
+  const [farmerInputs, setFarmerInputs] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchFarmerInputs = async () => {
+      const { data, error } = await supabase
+        .from('farmer_inputs')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (!error && data) {
+        setFarmerInputs(data);
+      }
+    };
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('name')
+          .eq('id', session.user.id)
+          .single();
+        
+        setUser({
+          name: profile?.name || session.user.email?.split('@')[0] || 'User',
+          email: session.user.email || ''
+        });
+        
+        // Fetch inputs after login
+        fetchFarmerInputs();
+      } else {
+        setUser(null);
+        setRole(UserRole.NONE);
+        setFarmerInputs([]); // Clear inputs on logout
+      }
+    });
+
+    fetchFarmerInputs();
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   useEffect(() => {
     localStorage.setItem('w2w_role', role);
     localStorage.setItem('w2w_user', JSON.stringify(user));
@@ -101,12 +150,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (userData) setUser(userData);
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await supabase.auth.signOut();
     setRole(UserRole.NONE);
     setUser(null);
   };
 
-  const addFarmerInput = (data: any) => {
+  const signUp = async (email: string, password: string, name: string) => {
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) throw error;
+    if (data.user) {
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert([{ id: data.user.id, name, email }]);
+      if (profileError) console.error('Error creating profile:', profileError);
+    }
+  };
+
+  const signIn = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+  };
+
+  const addFarmerInput = async (data: any) => {
+    const { data: inserted, error } = await supabase
+      .from('farmer_inputs')
+      .insert([{
+        name: data.name,
+        location: data.location,
+        quantity: Number(data.quantity),
+        quality: data.quality,
+        type: data.type
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error adding farmer input:', error);
+      throw error;
+    }
+
+    setFarmerInputs(prev => [inserted, ...prev]);
+    
     setInventory(prev => ({
       ...prev,
       rawOnions: data.type === 'Fresh Onion' ? prev.rawOnions + Number(data.quantity) : prev.rawOnions,
@@ -199,7 +284,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       role, user, login, logout, inventory, processingBatches, completedBatches,
       addFarmerInput, advanceBatch, sellProduct, marketplaceListings, pushToMarket,
       cart, addToCart, removeFromCart, clearCart, placeOrder, orders,
-      reviews, addReview
+      reviews, addReview, signUp, signIn, farmerInputs
     }}>
       {children}
     </AppContext.Provider>
